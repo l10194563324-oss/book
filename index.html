@@ -5,21 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MZ.Auto 电子书极简管理面板</title>
     <style>
+        /* 极简主义 UI 设计 */
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         body { background-color: #f4f6f8; color: #1a1a1a; padding: 20px 12px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 500px; background: #ffffff; padding: 24px 16px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); }
+        .container { width: 100%; max-width: 600px; background: #ffffff; padding: 24px 16px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); }
         h1 { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #111111; text-align: center; display: flex; justify-content: center; align-items: center; gap: 8px; }
-        .status-badge { font-size: 11px; font-weight: normal; background: #e6f4ea; color: #137333; padding: 2px 6px; border-radius: 4px; }
+        .status-badge { font-size: 11px; font-weight: normal; background: #eee; color: #666; padding: 2px 6px; border-radius: 4px; }
+        
+        /* 搜索框 */
         .search-box { width: 100%; padding: 12px 14px; font-size: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fafafa; transition: all 0.2s ease; outline: none; margin-bottom: 16px; display: none; }
-        .search-box:focus { border-color: #000000; background-color: #ffffff; }
-        .result-item { padding: 14px; border: 1px solid #f0f0f0; border-radius: 8px; margin-bottom: 10px; background-color: #ffffff; position: relative; word-wrap: break-word; }
-        .book-name { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: #000000; padding-right: 90px; }
-        .info-row { font-size: 12px; color: #666; width: 100%; overflow: hidden; padding-right: 90px; line-height: 1.4; }
-        .copy-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: #000000; color: #ffffff; border: none; padding: 8px 12px; font-size: 11px; font-weight: 500; border-radius: 6px; cursor: pointer; }
+        .search-box:focus { border-color: #000000; background-color: #ffffff; box-shadow: 0 0 0 3px rgba(0,0,0,0.04); }
+        
+        /* 结果卡片列表 - 改用Flex布局，彻底防止手机端按钮和文字重叠 */
+        .result-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; border: 1px solid #f0f0f0; border-radius: 8px; margin-bottom: 12px; background-color: #ffffff; gap: 16px; }
+        .result-item:hover { background-color: #fcfcfc; }
+        .item-body { flex: 1; min-width: 0; }
+        
+        /* 书名：支持全字完整换行显示 */
+        .book-name { font-weight: 600; font-size: 15px; margin-bottom: 6px; color: #000000; line-height: 1.4; word-break: break-all; }
+        
+        /* 第二栏网盘链接与提取码内容：高保真保留换行格式 */
+        .info-row { font-size: 12px; color: #666; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+        
+        /* 复制按钮 */
+        .copy-btn { flex-shrink: 0; background: #000000; color: #ffffff; border: none; padding: 10px 16px; font-size: 12px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: all 0.2s; -webkit-tap-highlight-color: transparent; }
         .copy-btn.copied { background: #28a745; }
+        
         .no-result { text-align: center; color: #999; font-size: 13px; padding: 30px 0; }
         .loading { text-align: center; color: #666; font-size: 14px; padding: 40px 0; }
-        .error-box { background: #fce8e6; color: #c5221f; padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; margin-top: 10px; border: 1px solid #fad2cf; }
+        .error-box { background: #fce8e6; color: #c5221f; padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; border: 1px solid #fad2cf; }
     </style>
 </head>
 <body>
@@ -36,12 +50,14 @@
     const resultsList = document.getElementById('resultsList');
     const countBadge = document.getElementById('countBadge');
 
+    // 自动计算当前同目录下的 CSV 路径
     const currentPath = window.location.pathname;
     const csvUrl = currentPath.endsWith('/') ? 'book_v2.csv' : currentPath.substring(0, currentPath.lastIndexOf('/') + 1) + 'book_v2.csv';
 
+    // 抓取并同步表格内容
     fetch(csvUrl, { cache: "no-cache" })
         .then(response => {
-            if (!response.ok) throw new Error(`无法读取表格 (状态码: ${response.status})`);
+            if (!response.ok) throw new Error(`无法读取表格 (错误代码: ${response.status})`);
             return response.text();
         })
         .then(text => {
@@ -55,56 +71,70 @@
             resultsList.innerHTML = `
                 <div class="error-box">
                     <b>❌ 同步失败原因：</b> ${err.message}<br><br>
-                    <small style="color:#666;">请确保 book_v2.csv 已经成功上传到 GitHub 仓库根目录。</small>
+                    <small style="color:#666;">请确保 book_v2.csv 文件和网页并排放在仓库最外层。</small>
                 </div>`;
         });
 
+    // 🚀 高标准 CSV 状态机解析函数：完美解决单元格内部包含换行符、双引号、逗号的切分难题
     function parseCSV(text) {
-        bookData = [];
-        // 1. 极其强悍的行切分，兼容所有系统的换行
-        const lines = text.split(/\r?\n|\r/);
-        
-        for (let i = 1; i < lines.length; i++) {
-            const currentLine = lines[i].trim();
-            if (!currentLine) continue;
-            
-            // 2. 终极强洗：利用正则表达式切分。它会自动剥离 Excel 生成的包裹双引号
-            // 这能完美解决第二栏里包含空格、冒号导致的解析崩溃问题
-            const matches = currentLine.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || currentLine.split(',');
-            
-            if (matches && matches.length >= 2) {
-                // 清洗第一栏的书名（去掉首尾多余引号）
-                const name = matches[0].replace(/^"|"$|'/g, '').trim();
-                // 核心：直接把剩余部分当成完整的链接内容拿走，原封不动保留
-                const url = matches[1].replace(/^"|"$|'/g, '').trim();
-                
-                if (name && url) {
-                    bookData.push({ name: name, url: url });
+        let lines = [];
+        let row = [""];
+        let inQuotes = false;
+
+        for (let i = 0; i < text.length; i++) {
+            let c = text[i];
+            let next = text[i + 1];
+
+            if (c === '"') {
+                if (inQuotes && next === '"') {
+                    row[row.length - 1] += '"';
+                    i++;
+                } else {
+                    inQuotes = !inQuotes; // 进入或离开引号保护区
                 }
+            } else if (c === ',' && !inQuotes) {
+                row.push(""); // 遇到英文逗号，切分到下一列
+            } else if ((c === '\r' || c === '\n') && !inQuotes) {
+                if (c === '\r' && next === '\n') {
+                    i++;
+                }
+                lines.push(row); // 保护区外的换行，才算真正的下一行
+                row = [""];
             } else {
-                // 如果正则没切开，使用后备的高保真首个逗号切分法
-                const firstComma = currentLine.indexOf(',');
-                if (firstComma !== -1) {
-                    const name = currentLine.substring(0, firstComma).replace(/^"|"$|'/g, '').trim();
-                    const url = currentLine.substring(firstComma + 1).replace(/^"|"$|'/g, '').trim();
-                    if (name && url) {
-                        bookData.push({ name: name, url: url });
-                    }
+                row[row.length - 1] += c;
+            }
+        }
+        if (row.length > 0 && (row.length > 1 || row[0] !== "")) {
+            lines.push(row);
+        }
+
+        // 数据清洗与填装
+        bookData = [];
+        // 从索引 1 开始，跳过第一行表头
+        for (let i = 1; i < lines.length; i++) {
+            let r = lines[i];
+            if (r.length >= 2) {
+                let name = r[0].trim();
+                let url = r[1].trim();
+                if (name || url) {
+                    bookData.push({ name: name, url: url });
                 }
             }
         }
 
+        // 成功加载后显示搜索框并渲染
         if (bookData.length > 0) {
-            searchInput.style.display = 'block';
+            searchInput.style.display = 'block'; // ✨ 修复了上一版的拼写错误！
             countBadge.innerText = `已加载 ${bookData.length} 本书`;
             countBadge.style.background = '#e6f4ea';
             countBadge.style.color = '#137333';
             renderResults(bookData);
         } else {
-            resultsList.innerHTML = '<div class="error-box">❌ 解析失败：无法正确读取数据，请确认您的 Excel 中第一栏是书名，第二栏是链接和提取码。</div>';
+            resultsList.innerHTML = '<div class="error-box">❌ 解析失败：未能在表格中识别到有效行。</div>';
         }
     }
 
+    // 渲染结果列表
     function renderResults(filteredBooks) {
         resultsList.innerHTML = '';
         if (filteredBooks.length === 0) {
@@ -116,16 +146,18 @@
             const item = document.createElement('div');
             item.className = 'result-item';
 
+            // 完美的自适应双栏布局结构
             item.innerHTML = `
-                <div class="book-name">《${book.name}》</div>
-                <div class="info-row">${book.url}</div>
+                <div class="item-body">
+                    <div class="book-name">${book.name}</div>
+                    <div class="info-row">${book.url}</div>
+                </div>
                 <button class="copy-btn" id="btn-${index}">一键复制</button>
             `;
             resultsList.appendChild(item);
 
-            // 3. 终极复制绑定：100% 绝对原样复制你第二栏里的所有文本（链接+提取码）
+            // 点击事件：100% 原样复制你在 Excel 第二栏填入的整段话（包含换行、提取码、分享语等）
             document.getElementById(`btn-${index}`).addEventListener('click', function() {
-                // 排除任何加工，你表格填什么，客人的剪贴板里拿到的就是什么
                 navigator.clipboard.writeText(book.url).then(() => {
                     this.innerText = '已复制 ✓';
                     this.className = 'copy-btn copied';
@@ -134,12 +166,13 @@
                         this.className = 'copy-btn';
                     }, 1200);
                 }).catch(err => {
-                    alert('复制失败，请尝试长按手动复制');
+                    alert('复制失败，请更换现代浏览器或长按文本手动复制');
                 });
             });
         });
     }
 
+    // 监听输入框实时无刷新搜索
     searchInput.addEventListener('input', (e) => {
         const keyword = e.target.value.trim().toLowerCase();
         const matched = bookData.filter(book => book.name.toLowerCase().includes(keyword));
