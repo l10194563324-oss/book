@@ -31,9 +31,9 @@
 <body>
 
 <div class="container">
-    <h1>📚 电子书云端面板 <span id="countBadge" class="status-badge">同步中...</span></h1>
+    <h1>📚 MZ.Auto 智库 <span id="countBadge" class="status-badge">同步中...</span></h1>
     <input type="text" id="searchInput" class="search-box" placeholder="输入书名关键字实时搜索..." autofocus>
-    <div id="resultsList"><div class="loading">正在同步 CSV 数据库，请稍候...</div></div>
+    <div id="resultsList"><div class="loading">正在同步云端 CSV 数据库，请稍候...</div></div>
 </div>
 
 <script>
@@ -42,8 +42,10 @@
     const resultsList = document.getElementById('resultsList');
     const countBadge = document.getElementById('countBadge');
 
-    // 自动获取同目录下的 book_v2.csv 文件
-    fetch('book_v2.csv')
+    // 智能化修正：强制读取当前网址目录下的数据，彻底解决路径报错
+    const csvUrl = window.location.pathname.endsWith('/') ? 'book_v2.csv' : window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1) + 'book_v2.csv';
+
+    fetch(csvUrl, { cache: "no-cache" }) // 强制不走缓存，确保每次打开都是最新 Excel 数据
         .then(response => {
             if (!response.ok) throw new Error('未找到表格文件');
             return response.text();
@@ -52,17 +54,18 @@
             parseCSV(text);
         })
         .catch(err => {
-            resultsList.innerHTML = `<div class="no-result">❌ 数据同步失败，请确保仓库中存在 book_v2.csv 且名字正确</div>`;
+            resultsList.innerHTML = `<div class="no-result">❌ 数据同步失败<br><span style="font-size:11px; color:#ccc;">请确保同仓库下存在全小写的 book_v2.csv</span></div>`;
         });
 
     function parseCSV(text) {
         bookData = [];
+        // 兼容处理中日文换行符
         const lines = text.split(/\r?\n/);
         
         for (let i = 1; i < lines.length; i++) {
             if (!lines[i].trim()) continue;
             
-            // 找到第一个逗号的位置，精准切分书名和链接，防止链接内部有逗号导致切错
+            // 精准切分第一个逗号
             const firstComma = lines[i].indexOf(',');
             if (firstComma !== -1) {
                 const name = lines[i].substring(0, firstComma).replace(/"/g, '').trim();
@@ -75,7 +78,7 @@
         }
 
         if (bookData.length > 0) {
-            searchInput.style.style.display = 'block';
+            searchInput.style.display = 'block';
             countBadge.innerText = `已加载 ${bookData.length} 本书`;
             renderResults(bookData);
         } else {
@@ -86,43 +89,8 @@
     function renderResults(filteredBooks) {
         resultsList.innerHTML = '';
         if (filteredBooks.length === 0) {
-            resultsList.innerHTML = '<div class="no-result">❌ 未找到相关电子书</div>';
+            resultsList.innerHTML = '<div class="no-result">❌ 未找到相关资料</div>';
             return;
         }
 
-        filteredBooks.forEach((book, index) => {
-            const item = document.createElement('div');
-            item.className = 'result-item';
-
-            item.innerHTML = `
-                <div class="book-name">${book.name}</div>
-                <div class="info-row">${book.url}</div>
-                <button class="copy-btn" id="btn-${index}">一键复制</button>
-            `;
-            resultsList.appendChild(item);
-
-            // 直接绑定纯文本复制，没有任何中间加密，100%原样复制链接和提取码
-            document.getElementById(`btn-${index}`).addEventListener('click', function() {
-                navigator.clipboard.writeText(book.url).then(() => {
-                    this.innerText = '已复制 ✓';
-                    this.className = 'copy-btn copied';
-                    setTimeout(() => {
-                        this.innerText = '一键复制';
-                        this.className = 'copy-btn';
-                    }, 1200);
-                }).catch(err => {
-                    alert('复制失败，请升级手机浏览器或手动长按复制');
-                });
-            });
-        });
-    }
-
-    searchInput.addEventListener('input', (e) => {
-        const keyword = e.target.value.trim().toLowerCase();
-        const matched = bookData.filter(book => book.name.toLowerCase().includes(keyword));
-        renderResults(matched);
-    });
-</script>
-
-</body>
-</html>
+        filtered
