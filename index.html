@@ -9,7 +9,7 @@
         body { background-color: #f4f6f8; color: #1a1a1a; padding: 20px 12px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 500px; background: #ffffff; padding: 24px 16px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); }
         h1 { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #111111; text-align: center; display: flex; justify-content: center; align-items: center; gap: 8px; }
-        .status-badge { font-size: 11px; font-weight: normal; background: #eee; color: #666; padding: 2px 6px; border-radius: 4px; }
+        .status-badge { font-size: 11px; font-weight: normal; background: #e6f4ea; color: #137333; padding: 2px 6px; border-radius: 4px; }
         .search-box { width: 100%; padding: 12px 14px; font-size: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fafafa; transition: all 0.2s ease; outline: none; margin-bottom: 16px; display: none; }
         .search-box:focus { border-color: #000000; background-color: #ffffff; }
         .result-item { padding: 14px; border: 1px solid #f0f0f0; border-radius: 8px; margin-bottom: 10px; background-color: #ffffff; position: relative; word-wrap: break-word; }
@@ -19,8 +19,7 @@
         .copy-btn.copied { background: #28a745; }
         .no-result { text-align: center; color: #999; font-size: 13px; padding: 30px 0; }
         .loading { text-align: center; color: #666; font-size: 14px; padding: 40px 0; }
-        /* 错误提示样式 */
-        .error-box { background: #fce8e6; color: #c5221f; padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; margin-top: 10px; border: 1px solid #fad2cf; text-align: left; }
+        .error-box { background: #fce8e6; color: #c5221f; padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; margin-top: 10px; border: 1px solid #fad2cf; }
     </style>
 </head>
 <body>
@@ -37,59 +36,60 @@
     const resultsList = document.getElementById('resultsList');
     const countBadge = document.getElementById('countBadge');
 
-    // 自动定位当前的 CSV 文件路径
     const currentPath = window.location.pathname;
     const csvUrl = currentPath.endsWith('/') ? 'book_v2.csv' : currentPath.substring(0, currentPath.lastIndexOf('/') + 1) + 'book_v2.csv';
 
-    // 发起网络请求，抓取表格
     fetch(csvUrl, { cache: "no-cache" })
         .then(response => {
-            if (!response.ok) {
-                // 如果找不到文件，直接抛出具体的网络状态码（如 404）
-                throw new Error(`服务器返回错误代码: ${response.status} (未找到文件或路径错误)`);
-            }
+            if (!response.ok) throw new Error(`无法读取表格 (状态码: ${response.status})`);
             return response.text();
         })
         .then(text => {
-            if (!text || text.trim() === "") {
-                throw new Error("检测到 book_v2.csv 文件存在，但里面没有任何数据（空文件）");
-            }
+            if (!text || text.trim() === "") throw new Error("CSV 文件内容为空");
             parseCSV(text);
         })
         .catch(err => {
-            // 核心修正：捕获所有未知错误并大字打印在网页上！
             countBadge.innerText = "同步失败";
             countBadge.style.background = "#fce8e6";
             countBadge.style.color = "#c5221f";
             resultsList.innerHTML = `
                 <div class="error-box">
-                    <b>❌ 智库连线失败，原因分析：</b><br>
-                    ${err.message}<br><br>
-                    <span style="color: #666; font-size: 11px;">
-                    💡 检查排查指南：<br>
-                    1. 检查你的 GitHub 仓库里是否存在全小写、名字长得一模一样的 <b>book_v2.csv</b> 檔案。<br>
-                    2. 如果你是用电脑本地双击打开 HTML 文件的，请改用你在 Settings 里面拿到的 GitHub Pages 线上網址打开。
-                    </span>
+                    <b>❌ 同步失败原因：</b> ${err.message}<br><br>
+                    <small style="color:#666;">请确保 book_v2.csv 已经成功上传到 GitHub 仓库根目录。</small>
                 </div>`;
         });
 
     function parseCSV(text) {
         bookData = [];
-        // 兼容处理 Windows 和 Mac 导出的换行符
+        // 1. 极其强悍的行切分，兼容所有系统的换行
         const lines = text.split(/\r?\n|\r/);
         
         for (let i = 1; i < lines.length; i++) {
             const currentLine = lines[i].trim();
             if (!currentLine) continue;
             
-            // 智能切割第一个逗号
-            const firstComma = currentLine.indexOf(',');
-            if (firstComma !== -1) {
-                const name = currentLine.substring(0, firstComma).replace(/"/g, '').trim();
-                const url = currentLine.substring(firstComma + 1).replace(/"/g, '').trim();
+            // 2. 终极强洗：利用正则表达式切分。它会自动剥离 Excel 生成的包裹双引号
+            // 这能完美解决第二栏里包含空格、冒号导致的解析崩溃问题
+            const matches = currentLine.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || currentLine.split(',');
+            
+            if (matches && matches.length >= 2) {
+                // 清洗第一栏的书名（去掉首尾多余引号）
+                const name = matches[0].replace(/^"|"$|'/g, '').trim();
+                // 核心：直接把剩余部分当成完整的链接内容拿走，原封不动保留
+                const url = matches[1].replace(/^"|"$|'/g, '').trim();
                 
-                if (name) {
+                if (name && url) {
                     bookData.push({ name: name, url: url });
+                }
+            } else {
+                // 如果正则没切开，使用后备的高保真首个逗号切分法
+                const firstComma = currentLine.indexOf(',');
+                if (firstComma !== -1) {
+                    const name = currentLine.substring(0, firstComma).replace(/^"|"$|'/g, '').trim();
+                    const url = currentLine.substring(firstComma + 1).replace(/^"|"$|'/g, '').trim();
+                    if (name && url) {
+                        bookData.push({ name: name, url: url });
+                    }
                 }
             }
         }
@@ -101,7 +101,7 @@
             countBadge.style.color = '#137333';
             renderResults(bookData);
         } else {
-            resultsList.innerHTML = '<div class="error-box">❌ 解析失败：CSV 文件内容格式不正确，无法提取“书名”或“链接”。请确保第一栏是书名，第二栏是链接，中间用英文逗号隔开。</div>';
+            resultsList.innerHTML = '<div class="error-box">❌ 解析失败：无法正确读取数据，请确认您的 Excel 中第一栏是书名，第二栏是链接和提取码。</div>';
         }
     }
 
@@ -123,7 +123,9 @@
             `;
             resultsList.appendChild(item);
 
+            // 3. 终极复制绑定：100% 绝对原样复制你第二栏里的所有文本（链接+提取码）
             document.getElementById(`btn-${index}`).addEventListener('click', function() {
+                // 排除任何加工，你表格填什么，客人的剪贴板里拿到的就是什么
                 navigator.clipboard.writeText(book.url).then(() => {
                     this.innerText = '已复制 ✓';
                     this.className = 'copy-btn copied';
