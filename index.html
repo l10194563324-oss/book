@@ -2,20 +2,27 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MZ.Auto 电子书云端面板</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MZ.Auto 电子书极简管理面板</title>
     <style>
+        /* 极简主义 UI 设计 */
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         body { background-color: #f4f6f8; color: #1a1a1a; padding: 20px 12px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 500px; background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); }
+        .container { width: 100%; max-width: 500px; background: #ffffff; padding: 24px 16px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); }
         h1 { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #111111; text-align: center; display: flex; justify-content: center; align-items: center; gap: 8px; }
         .status-badge { font-size: 11px; font-weight: normal; background: #e6f4ea; color: #137333; padding: 2px 6px; border-radius: 4px; }
-        .search-box { width: 100%; padding: 12px 14px; font-size: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fafafa; transition: all 0.2s ease; outline: none; margin-bottom: 16px; }
+        
+        /* 搜索框 */
+        .search-box { width: 100%; padding: 12px 14px; font-size: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fafafa; transition: all 0.2s ease; outline: none; margin-bottom: 16px; display: none; }
         .search-box:focus { border-color: #000000; background-color: #ffffff; box-shadow: 0 0 0 3px rgba(0,0,0,0.04); }
-        .result-item { padding: 14px; border: 1px solid #f0f0f0; border-radius: 8px; margin-bottom: 10px; background-color: #ffffff; position: relative; }
-        .book-name { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: #000000; padding-right: 85px; }
-        .info-row { font-size: 12px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 85px; }
-        .copy-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: #000000; color: #ffffff; border: none; padding: 8px 12px; font-size: 11px; font-weight: 500; border-radius: 6px; cursor: pointer; }
+        
+        /* 结果列表 */
+        .result-item { padding: 14px; border: 1px solid #f0f0f0; border-radius: 8px; margin-bottom: 10px; background-color: #ffffff; position: relative; word-wrap: break-word; }
+        .book-name { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: #000000; padding-right: 90px; }
+        .info-row { font-size: 12px; color: #666; width: 100%; overflow: hidden; padding-right: 90px; line-height: 1.4; white-space: normal; }
+        
+        /* 复制按钮 */
+        .copy-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: #000000; color: #ffffff; border: none; padding: 8px 12px; font-size: 11px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
         .copy-btn.copied { background: #28a745; }
         .no-result { text-align: center; color: #999; font-size: 13px; padding: 30px 0; }
         .loading { text-align: center; color: #666; font-size: 14px; padding: 40px 0; }
@@ -25,8 +32,8 @@
 
 <div class="container">
     <h1>📚 电子书云端面板 <span id="countBadge" class="status-badge">同步中...</span></h1>
-    <input type="text" id="searchInput" class="search-box" placeholder="输入书名关键字实时搜索..." style="display:none;">
-    <div id="resultsList"><div class="loading">正在从您的 Excel 表格同步数据，请稍候...</div></div>
+    <input type="text" id="searchInput" class="search-box" placeholder="输入书名关键字实时搜索..." autofocus>
+    <div id="resultsList"><div class="loading">正在同步 CSV 数据库，请稍候...</div></div>
 </div>
 
 <script>
@@ -35,8 +42,7 @@
     const resultsList = document.getElementById('resultsList');
     const countBadge = document.getElementById('countBadge');
 
-    // 💡 核心黑科技：自动获取当前 GitHub 仓库目录下的 book_v2.csv 文件
-    // 这样你以后只要更新仓库里的 csv 即可，网页会自动读取最新的！
+    // 自动获取同目录下的 book_v2.csv 文件
     fetch('book_v2.csv')
         .then(response => {
             if (!response.ok) throw new Error('未找到表格文件');
@@ -46,7 +52,7 @@
             parseCSV(text);
         })
         .catch(err => {
-            resultsList.innerHTML = `<div class="no-result">❌ 数据同步失败，请检查仓库中是否存在 book_v2.csv 文件</div>`;
+            resultsList.innerHTML = `<div class="no-result">❌ 数据同步失败，请确保仓库中存在 book_v2.csv 且名字正确</div>`;
         });
 
     function parseCSV(text) {
@@ -55,18 +61,22 @@
         
         for (let i = 1; i < lines.length; i++) {
             if (!lines[i].trim()) continue;
-            const cells = lines[i].split(',');
-            if (cells.length >= 2) {
-                bookData.push({
-                    name: cells[0].replace(/"/g, '').trim(),
-                    url: cells[1].replace(/"/g, '').trim()
-                });
+            
+            // 找到第一个逗号的位置，精准切分书名和链接，防止链接内部有逗号导致切错
+            const firstComma = lines[i].indexOf(',');
+            if (firstComma !== -1) {
+                const name = lines[i].substring(0, firstComma).replace(/"/g, '').trim();
+                const url = lines[i].substring(firstComma + 1).replace(/"/g, '').trim();
+                
+                if (name) {
+                    bookData.push({ name: name, url: url });
+                }
             }
         }
 
         if (bookData.length > 0) {
-            searchInput.style.display = 'block';
-            countBadge.innerText = `已连线 ${bookData.length} 本书`;
+            searchInput.style.style.display = 'block';
+            countBadge.innerText = `已加载 ${bookData.length} 本书`;
             renderResults(bookData);
         } else {
             resultsList.innerHTML = '<div class="no-result">表格内似乎没有有效数据</div>';
@@ -80,17 +90,30 @@
             return;
         }
 
-        filteredBooks.forEach(book => {
+        filteredBooks.forEach((book, index) => {
             const item = document.createElement('div');
             item.className = 'result-item';
-            const fullTextToCopy = `亲，您购买的《${book.name}》下载链接已准备好：\n\n🔗 ${book.url}\n\n⚠️ 提示：请复制整段链接到浏览器或网盘APP打开下载。祝您阅读愉快！`;
 
             item.innerHTML = `
-                <div class="book-name">《${book.name}》</div>
-                <div class="info-row">📋 ${book.url}</div>
-                <button class="copy-btn" onclick="copyToClipboard('${btoa(unescape(encodeURIComponent(fullTextToCopy)))}', this)">复制话术</button>
+                <div class="book-name">${book.name}</div>
+                <div class="info-row">${book.url}</div>
+                <button class="copy-btn" id="btn-${index}">一键复制</button>
             `;
             resultsList.appendChild(item);
+
+            // 直接绑定纯文本复制，没有任何中间加密，100%原样复制链接和提取码
+            document.getElementById(`btn-${index}`).addEventListener('click', function() {
+                navigator.clipboard.writeText(book.url).then(() => {
+                    this.innerText = '已复制 ✓';
+                    this.className = 'copy-btn copied';
+                    setTimeout(() => {
+                        this.innerText = '一键复制';
+                        this.className = 'copy-btn';
+                    }, 1200);
+                }).catch(err => {
+                    alert('复制失败，请升级手机浏览器或手动长按复制');
+                });
+            });
         });
     }
 
@@ -99,15 +122,6 @@
         const matched = bookData.filter(book => book.name.toLowerCase().includes(keyword));
         renderResults(matched);
     });
-
-    function copyToClipboard(base64Text, button) {
-        const text = decodeURIComponent(escape(atob(base64Text)));
-        navigator.clipboard.writeText(text).then(() => {
-            button.innerText = '已复制 ✓';
-            button.className = 'copy-btn copied';
-            setTimeout(() => { button.innerText = '复制话术'; button.className = 'copy-btn'; }, 1200);
-        }).catch(err => { alert('复制失败'); });
-    }
 </script>
 
 </body>
