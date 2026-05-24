@@ -5,27 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MZ.Auto 电子书极简管理面板</title>
     <style>
-        /* 极简主义 UI 设计 */
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         body { background-color: #f4f6f8; color: #1a1a1a; padding: 20px 12px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 500px; background: #ffffff; padding: 24px 16px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); }
         h1 { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #111111; text-align: center; display: flex; justify-content: center; align-items: center; gap: 8px; }
-        .status-badge { font-size: 11px; font-weight: normal; background: #e6f4ea; color: #137333; padding: 2px 6px; border-radius: 4px; }
-        
-        /* 搜索框 */
+        .status-badge { font-size: 11px; font-weight: normal; background: #eee; color: #666; padding: 2px 6px; border-radius: 4px; }
         .search-box { width: 100%; padding: 12px 14px; font-size: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fafafa; transition: all 0.2s ease; outline: none; margin-bottom: 16px; display: none; }
-        .search-box:focus { border-color: #000000; background-color: #ffffff; box-shadow: 0 0 0 3px rgba(0,0,0,0.04); }
-        
-        /* 结果列表 */
+        .search-box:focus { border-color: #000000; background-color: #ffffff; }
         .result-item { padding: 14px; border: 1px solid #f0f0f0; border-radius: 8px; margin-bottom: 10px; background-color: #ffffff; position: relative; word-wrap: break-word; }
         .book-name { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: #000000; padding-right: 90px; }
-        .info-row { font-size: 12px; color: #666; width: 100%; overflow: hidden; padding-right: 90px; line-height: 1.4; white-space: normal; }
-        
-        /* 复制按钮 */
-        .copy-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: #000000; color: #ffffff; border: none; padding: 8px 12px; font-size: 11px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+        .info-row { font-size: 12px; color: #666; width: 100%; overflow: hidden; padding-right: 90px; line-height: 1.4; }
+        .copy-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: #000000; color: #ffffff; border: none; padding: 8px 12px; font-size: 11px; font-weight: 500; border-radius: 6px; cursor: pointer; }
         .copy-btn.copied { background: #28a745; }
         .no-result { text-align: center; color: #999; font-size: 13px; padding: 30px 0; }
         .loading { text-align: center; color: #666; font-size: 14px; padding: 40px 0; }
+        /* 错误提示样式 */
+        .error-box { background: #fce8e6; color: #c5221f; padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; margin-top: 10px; border: 1px solid #fad2cf; text-align: left; }
     </style>
 </head>
 <body>
@@ -42,34 +37,56 @@
     const resultsList = document.getElementById('resultsList');
     const countBadge = document.getElementById('countBadge');
 
-    // 智能化修正：强制读取当前网址目录下的数据，彻底解决路径报错
-    const csvUrl = window.location.pathname.endsWith('/') ? 'book_v2.csv' : window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1) + 'book_v2.csv';
+    // 自动定位当前的 CSV 文件路径
+    const currentPath = window.location.pathname;
+    const csvUrl = currentPath.endsWith('/') ? 'book_v2.csv' : currentPath.substring(0, currentPath.lastIndexOf('/') + 1) + 'book_v2.csv';
 
-    fetch(csvUrl, { cache: "no-cache" }) // 强制不走缓存，确保每次打开都是最新 Excel 数据
+    // 发起网络请求，抓取表格
+    fetch(csvUrl, { cache: "no-cache" })
         .then(response => {
-            if (!response.ok) throw new Error('未找到表格文件');
+            if (!response.ok) {
+                // 如果找不到文件，直接抛出具体的网络状态码（如 404）
+                throw new Error(`服务器返回错误代码: ${response.status} (未找到文件或路径错误)`);
+            }
             return response.text();
         })
         .then(text => {
+            if (!text || text.trim() === "") {
+                throw new Error("检测到 book_v2.csv 文件存在，但里面没有任何数据（空文件）");
+            }
             parseCSV(text);
         })
         .catch(err => {
-            resultsList.innerHTML = `<div class="no-result">❌ 数据同步失败<br><span style="font-size:11px; color:#ccc;">请确保同仓库下存在全小写的 book_v2.csv</span></div>`;
+            // 核心修正：捕获所有未知错误并大字打印在网页上！
+            countBadge.innerText = "同步失败";
+            countBadge.style.background = "#fce8e6";
+            countBadge.style.color = "#c5221f";
+            resultsList.innerHTML = `
+                <div class="error-box">
+                    <b>❌ 智库连线失败，原因分析：</b><br>
+                    ${err.message}<br><br>
+                    <span style="color: #666; font-size: 11px;">
+                    💡 检查排查指南：<br>
+                    1. 检查你的 GitHub 仓库里是否存在全小写、名字长得一模一样的 <b>book_v2.csv</b> 檔案。<br>
+                    2. 如果你是用电脑本地双击打开 HTML 文件的，请改用你在 Settings 里面拿到的 GitHub Pages 线上網址打开。
+                    </span>
+                </div>`;
         });
 
     function parseCSV(text) {
         bookData = [];
-        // 兼容处理中日文换行符
-        const lines = text.split(/\r?\n/);
+        // 兼容处理 Windows 和 Mac 导出的换行符
+        const lines = text.split(/\r?\n|\r/);
         
         for (let i = 1; i < lines.length; i++) {
-            if (!lines[i].trim()) continue;
+            const currentLine = lines[i].trim();
+            if (!currentLine) continue;
             
-            // 精准切分第一个逗号
-            const firstComma = lines[i].indexOf(',');
+            // 智能切割第一个逗号
+            const firstComma = currentLine.indexOf(',');
             if (firstComma !== -1) {
-                const name = lines[i].substring(0, firstComma).replace(/"/g, '').trim();
-                const url = lines[i].substring(firstComma + 1).replace(/"/g, '').trim();
+                const name = currentLine.substring(0, firstComma).replace(/"/g, '').trim();
+                const url = currentLine.substring(firstComma + 1).replace(/"/g, '').trim();
                 
                 if (name) {
                     bookData.push({ name: name, url: url });
@@ -80,9 +97,11 @@
         if (bookData.length > 0) {
             searchInput.style.display = 'block';
             countBadge.innerText = `已加载 ${bookData.length} 本书`;
+            countBadge.style.background = '#e6f4ea';
+            countBadge.style.color = '#137333';
             renderResults(bookData);
         } else {
-            resultsList.innerHTML = '<div class="no-result">表格内似乎没有有效数据</div>';
+            resultsList.innerHTML = '<div class="error-box">❌ 解析失败：CSV 文件内容格式不正确，无法提取“书名”或“链接”。请确保第一栏是书名，第二栏是链接，中间用英文逗号隔开。</div>';
         }
     }
 
@@ -93,4 +112,38 @@
             return;
         }
 
-        filtered
+        filteredBooks.forEach((book, index) => {
+            const item = document.createElement('div');
+            item.className = 'result-item';
+
+            item.innerHTML = `
+                <div class="book-name">《${book.name}》</div>
+                <div class="info-row">${book.url}</div>
+                <button class="copy-btn" id="btn-${index}">一键复制</button>
+            `;
+            resultsList.appendChild(item);
+
+            document.getElementById(`btn-${index}`).addEventListener('click', function() {
+                navigator.clipboard.writeText(book.url).then(() => {
+                    this.innerText = '已复制 ✓';
+                    this.className = 'copy-btn copied';
+                    setTimeout(() => {
+                        this.innerText = '一键复制';
+                        this.className = 'copy-btn';
+                    }, 1200);
+                }).catch(err => {
+                    alert('复制失败，请尝试长按手动复制');
+                });
+            });
+        });
+    }
+
+    searchInput.addEventListener('input', (e) => {
+        const keyword = e.target.value.trim().toLowerCase();
+        const matched = bookData.filter(book => book.name.toLowerCase().includes(keyword));
+        renderResults(matched);
+    });
+</script>
+
+</body>
+</html>
